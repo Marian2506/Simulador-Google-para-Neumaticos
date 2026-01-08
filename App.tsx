@@ -1,58 +1,58 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Transporter, SimulationParams, ContactInfo } from './types';
-import { parseTransporterData, calculateSimulation, DEFAULT_DATA } from './utils';
+import { parseTransporterData, calculateSimulation, DEFAULT_DATA_CSV } from './utils';
 import { SimulatorForm } from './components/SimulatorForm';
 import { SimulationResultView } from './components/SimulationResultView';
-import { Truck, Upload } from 'lucide-react';
+import { Truck, Upload, Info, Lock, Settings, UserCheck } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
-// --- HELPER TO GENERATE PNG BASE64 LOGOS ---
-// This ensures we have valid PNG data for the PDF generator, which fails with SVGs or external URLs.
-const createTextLogo = (text1: string, color1: string, text2: string, color2: string): string => {
+// Función para generar logos con colores específicos de las marcas
+const createBrandLogo = (name: string): string => {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   if (!ctx) return '';
-
-  canvas.width = 200;
-  canvas.height = 80;
-
-  // Background (Transparent)
+  canvas.width = 120;
+  canvas.height = 60;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // Text Styles
-  ctx.font = 'bold 50px Arial, sans-serif';
+  ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-
-  // Draw Part 1
-  ctx.fillStyle = color1;
-  ctx.fillText(text1, 10, 40);
-
-  // Measure Part 1 to place Part 2
-  const width1 = ctx.measureText(text1).width;
-
-  // Draw Part 2
-  ctx.fillStyle = color2;
-  ctx.fillText(text2, 10 + width1, 40);
-
+  
+  if (name === 'ACA') {
+    // Logo ACA Lookalike
+    ctx.font = 'bold 30px Arial';
+    ctx.fillStyle = '#1e3a8a'; // Azul oscuro
+    ctx.fillText('ACA', 60, 30);
+    ctx.strokeStyle = '#f97316'; // Naranja
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(60, 30, 25, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (name === 'AL2') {
+    // Logo AL2 Lookalike
+    ctx.font = 'bold 30px Arial';
+    ctx.fillStyle = '#1e3a8a';
+    ctx.fillText('AL', 45, 30);
+    ctx.fillStyle = '#4ade80'; // Verde claro
+    ctx.font = 'bold 35px Arial';
+    ctx.fillText('2', 85, 25);
+  }
   return canvas.toDataURL('image/png');
 };
 
 function App() {
   const [transporters, setTransporters] = useState<Transporter[]>([]);
   const [selectedTransporter, setSelectedTransporter] = useState<Transporter | null>(null);
-  
-  // Logos State (Generated on mount)
-  const [logos, setLogos] = useState({ fate: '', giro: '', al2: '' });
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [logos, setLogos] = useState({ aca: '', al2: '' });
 
-  // Simulation State
   const [simParams, setSimParams] = useState<SimulationParams>({
     items: [],
     downPayment: 0,
-    interestRate: 35,
+    interestRate: 35, // Tasa default
     months: 12,
     isAnnualPayment: false
   });
 
-  // Contact Info State
   const [contactInfo, setContactInfo] = useState<ContactInfo>({
     province: '',
     city: '',
@@ -62,109 +62,93 @@ function App() {
   });
 
   useEffect(() => {
-    // Load default data
-    const initialData = parseTransporterData(DEFAULT_DATA);
-    setTransporters(initialData);
-
-    // Generate Logos as PNG Base64 for PDF compatibility
+    const rows = DEFAULT_DATA_CSV.split('\n').map(l => l.split(';'));
+    setTransporters(parseTransporterData(rows));
     setLogos({
-      fate: createTextLogo('Fate', '#000000', 'O', '#ce1126'),
-      giro: createTextLogo('Giro', '#2a3088', '>', '#f9a825'), // Using > as arrow symbol representation
-      al2: createTextLogo('AL', '#1e0876', '2', '#4ade80')
+      aca: createBrandLogo('ACA'),
+      al2: createBrandLogo('AL2')
     });
   }, []);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = (e) => {
-      const text = e.target?.result as string;
-      const parsed = parseTransporterData(text);
-      setTransporters(parsed);
+      const data = new Uint8Array(e.target?.result as ArrayBuffer);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+      const parsed = parseTransporterData(jsonData as any[]);
+      if (parsed.length > 0) {
+        setTransporters(parsed);
+        alert(`Éxito: ${parsed.length} transportistas importados.`);
+      }
     };
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
+  };
+
+  const toggleAdmin = () => {
+    if (!isAdmin) {
+      const pass = prompt("Ingrese contraseña de administrador:");
+      if (pass === "admin123") {
+        setIsAdmin(true);
+      } else {
+        alert("Contraseña incorrecta");
+      }
+    } else {
+      setIsAdmin(false);
+    }
   };
 
   const handleReset = () => {
     setSelectedTransporter(null);
-    setSimParams({
-      items: [],
-      downPayment: 0,
-      interestRate: 35,
-      months: 12,
-      isAnnualPayment: false
-    });
-    setContactInfo({
-      province: '',
-      city: '',
-      address: '',
-      phone: '',
-      email: ''
-    });
+    setSimParams(prev => ({ ...prev, items: [] }));
+    setContactInfo({ province: '', city: '', address: '', phone: '', email: '' });
   };
 
   const result = selectedTransporter ? calculateSimulation(selectedTransporter, simParams) : null;
 
   return (
-    <div className="min-h-screen font-sans pb-12 bg-[#0f172a]">
-      
-      {/* Header */}
-      <header className="bg-slate-900 border-b border-slate-800 shadow-lg sticky top-0 z-50">
+    <div className="min-h-screen pb-12 bg-[#0f172a] text-slate-200">
+      <header className="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-50">
         <div className="container mx-auto px-4 h-24 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-br from-blue-600 to-blue-800 p-2.5 rounded-xl shadow-lg shadow-blue-900/20">
-                <Truck className="w-7 h-7 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight text-white">FinanTruck <span className="text-blue-500">Pro</span></h1>
-                <p className="text-xs text-slate-400">Simulador de Financiación de Neumáticos</p>
-              </div>
+          <div className="flex items-center gap-4">
+            <div className="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-900/40">
+              <Truck className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-black text-white leading-none">FinanTruck <span className="text-blue-500">PRO</span></h1>
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">Gestión Fersi SA (AL2)</p>
             </div>
           </div>
 
-          {/* Logos Section - Now using the Generated PNGs */}
-          <div className="hidden md:flex items-center gap-3 bg-white p-2 rounded-lg border border-white/10 shadow-inner">
-             {logos.fate && (
-               <div className="h-10 w-24 flex items-center justify-center overflow-hidden border-r border-slate-100 pr-2">
-                  <img src={logos.fate} alt="FATE O" className="h-full w-full object-contain" />
-               </div>
-             )}
-             {logos.giro && (
-               <div className="h-10 w-24 flex items-center justify-center overflow-hidden border-r border-slate-100 px-2">
-                  <img src={logos.giro} alt="GIRO" className="h-full w-full object-contain" />
-               </div>
-             )}
-             {logos.al2 && (
-               <div className="h-10 w-24 flex items-center justify-center overflow-hidden pl-2">
-                  <img src={logos.al2} alt="AL2" className="h-full w-full object-contain" />
-               </div>
-             )}
+          <div className="hidden md:flex items-center gap-6 px-6 py-2 bg-white/5 rounded-2xl border border-white/10">
+            <img src={logos.aca} alt="ACA" className="h-10 w-auto" />
+            <div className="w-px h-8 bg-slate-700" />
+            <img src={logos.al2} alt="AL2" className="h-10 w-auto" />
           </div>
-          
-          <div className="flex items-center gap-4">
-            <label className="cursor-pointer flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm transition-colors border border-slate-700">
+
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={toggleAdmin}
+              className={`p-2.5 rounded-xl border transition-all ${isAdmin ? 'bg-amber-500/10 border-amber-500/50 text-amber-500' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'}`}
+              title="Panel de Administración"
+            >
+              {isAdmin ? <UserCheck className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
+            </button>
+            <label className="cursor-pointer flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold transition-all shadow-xl shadow-blue-900/40">
               <Upload className="w-4 h-4" />
-              <span className="hidden lg:inline">Importar Nómina</span>
-              <input 
-                type="file" 
-                accept=".csv,.txt" 
-                className="hidden" 
-                onChange={handleFileUpload}
-              />
+              <span className="hidden sm:inline">Cargar Nómina</span>
+              <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileUpload} />
             </label>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <div className="grid lg:grid-cols-12 gap-8">
-          
-          {/* Left Column: Form */}
-          <div className="lg:col-span-5">
+          <div className="lg:col-span-5 space-y-6">
             <SimulatorForm 
               allTransporters={transporters}
               selectedTransporter={selectedTransporter}
@@ -174,35 +158,47 @@ function App() {
               contactInfo={contactInfo}
               onContactInfoChange={setContactInfo}
               onReset={handleReset}
+              isAdmin={isAdmin}
             />
           </div>
           
-          {/* Right Column: Results */}
           <div className="lg:col-span-7">
             {result && selectedTransporter ? (
-              <div className="animate-fadeIn sticky top-24">
-                <h2 className="text-2xl font-bold text-white mb-6 border-l-4 border-blue-500 pl-3">Resultados de la Simulación</h2>
+              <div className="animate-fadeIn">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-black text-white border-l-4 border-blue-500 pl-4">Propuesta de Financiación</h2>
+                  {isAdmin && (
+                    <div className="flex items-center gap-2 text-amber-500 text-xs font-bold bg-amber-500/10 px-3 py-1.5 rounded-full border border-amber-500/20">
+                      <Settings className="w-3 h-3" /> MODO ADMIN ACTIVO
+                    </div>
+                  )}
+                </div>
                 <SimulationResultView 
                    result={result} 
                    transporter={selectedTransporter} 
                    contactInfo={contactInfo} 
                    items={simParams.items}
                    logos={logos}
+                   tna={simParams.interestRate}
                 />
               </div>
             ) : (
-              <div className="h-full min-h-[400px] flex flex-col items-center justify-center bg-slate-800/50 rounded-3xl border border-slate-700 border-dashed p-10 text-center">
-                <div className="bg-slate-800 p-6 rounded-full mb-6 shadow-xl">
-                  <Truck className="w-16 h-16 text-slate-600" />
+              <div className="h-full min-h-[600px] flex flex-col items-center justify-center bg-slate-900/40 rounded-[2rem] border-2 border-slate-800 border-dashed p-12 text-center">
+                <div className="relative mb-8">
+                  <div className="absolute -inset-4 bg-blue-600/20 blur-3xl rounded-full"></div>
+                  <Truck className="w-24 h-24 text-slate-800 relative z-10" />
                 </div>
-                <h3 className="text-xl font-semibold text-slate-400 mb-2">Esperando Datos</h3>
-                <p className="text-slate-500 max-w-md">
-                  Complete los datos del transportista en el formulario de la izquierda para generar una simulación de crédito.
+                <h3 className="text-2xl font-bold text-slate-300 mb-4">Inicie una simulación</h3>
+                <p className="text-slate-500 max-w-sm mb-8 leading-relaxed">
+                  Seleccione un transportista de la nómina, complete sus datos de contacto y elija los neumáticos para generar la propuesta comercial.
                 </p>
+                <div className="flex gap-4 items-center justify-center">
+                   <img src={logos.aca} alt="ACA" className="h-12 opacity-20 grayscale" />
+                   <img src={logos.al2} alt="AL2" className="h-12 opacity-20 grayscale" />
+                </div>
               </div>
             )}
           </div>
-
         </div>
       </main>
     </div>

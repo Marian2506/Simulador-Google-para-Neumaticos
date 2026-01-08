@@ -14,7 +14,8 @@
     "recharts": "2.12.7",
     "jspdf": "2.5.1",
     "jspdf-autotable": "3.8.2",
-    "lucide-react": "0.344.0"
+    "lucide-react": "0.344.0",
+    "xlsx": "0.18.5"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

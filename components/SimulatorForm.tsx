@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { SimulationParams, Transporter, ContactInfo, CartItem } from '../types';
-import { Calculator, Truck, Percent, DollarSign, Search, MapPin, Phone, Mail, Building2, FileText, Plus, Minus, Calendar, RotateCcw } from 'lucide-react';
+
+import React, { useState, useRef } from 'react';
+import { SimulationParams, Transporter, ContactInfo } from '../types';
+// Added Truck and Lock to imports
+import { Search, MapPin, Building2, Plus, Minus, Calendar, RotateCcw, ShieldCheck, Mail, Phone, Hash, Globe, Percent, Truck, Lock } from 'lucide-react';
 import { formatCurrency, TIRE_MODELS } from '../utils';
 
 interface SimulatorFormProps {
@@ -12,6 +14,7 @@ interface SimulatorFormProps {
   contactInfo: ContactInfo;
   onContactInfoChange: (info: ContactInfo) => void;
   onReset: () => void;
+  isAdmin: boolean;
 }
 
 export const SimulatorForm: React.FC<SimulatorFormProps> = ({ 
@@ -22,370 +25,202 @@ export const SimulatorForm: React.FC<SimulatorFormProps> = ({
   onSimParamsChange,
   contactInfo,
   onContactInfoChange,
-  onReset
+  onReset,
+  isAdmin
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowSuggestions(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Clear local search term when transporter is deselected (reset)
-  useEffect(() => {
-    if (!selectedTransporter) {
-      setSearchTerm('');
-    }
-  }, [selectedTransporter]);
-
-  const handleSimChange = (key: keyof SimulationParams, value: string | number | boolean) => {
-    onSimParamsChange({
-      ...simParams,
-      [key]: value
-    });
-  };
-
-  const handleContactChange = (key: keyof ContactInfo, value: string) => {
-    onContactInfoChange({
-      ...contactInfo,
-      [key]: value
-    });
-  };
-
   const updateCart = (tireId: string, change: number) => {
-    const currentItem = simParams.items.find(i => i.tireId === tireId) || { tireId, quantity: 0 };
-    const newQuantity = Math.max(0, currentItem.quantity + change);
-    
-    let newItems = [...simParams.items];
-    const index = newItems.findIndex(i => i.tireId === tireId);
+    const currentItems = [...simParams.items];
+    const index = currentItems.findIndex(i => i.tireId === tireId);
     
     if (index >= 0) {
-      if (newQuantity === 0) {
-        newItems.splice(index, 1);
-      } else {
-        newItems[index] = { ...newItems[index], quantity: newQuantity };
-      }
-    } else if (newQuantity > 0) {
-      newItems.push({ tireId, quantity: newQuantity });
+      const newQty = Math.max(0, currentItems[index].quantity + change);
+      if (newQty === 0) currentItems.splice(index, 1);
+      else currentItems[index].quantity = newQty;
+    } else if (change > 0) {
+      currentItems.push({ tireId, quantity: change });
     }
-
-    onSimParamsChange({ ...simParams, items: newItems });
+    onSimParamsChange({ ...simParams, items: currentItems });
   };
 
   const filteredTransporters = allTransporters.filter(t => 
-    t.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    t.cuit.includes(searchTerm)
-  ).slice(0, 10);
+    t.name.toLowerCase().includes(searchTerm.toLowerCase()) || t.cuit.includes(searchTerm)
+  ).slice(0, 8);
 
-  const selectTransporter = (t: Transporter) => {
-    onTransporterSelect(t);
-    setSearchTerm(t.name);
-    setShowSuggestions(false);
-  };
+  const totalPurchase = simParams.items.reduce((acc, item) => {
+    const tire = TIRE_MODELS.find(t => t.id === item.tireId);
+    return acc + (tire ? tire.price * item.quantity : 0);
+  }, 0);
 
-  const calculateTotalPurchase = () => {
-    return simParams.items.reduce((acc, item) => {
-      const tire = TIRE_MODELS.find(t => t.id === item.tireId);
-      return acc + (tire ? tire.price * item.quantity : 0);
-    }, 0);
-  };
+  const maxLimit = selectedTransporter?.maxCreditLimit || 0;
+  const isOverLimit = totalPurchase > maxLimit;
 
   return (
-    <div className="bg-slate-800 p-6 rounded-xl shadow-xl border border-slate-700 text-slate-100">
-      
-      {/* --- SECTION 1: CLIENT IDENTIFICATION (AUTO) --- */}
-      <div className="mb-8 border-b border-slate-700 pb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold text-blue-400 flex items-center gap-2">
-            <Building2 className="w-5 h-5" />
-            Identificación del Transportista
+    <div className="space-y-6">
+      {/* 1. DATOS DEL TRANSPORTISTA */}
+      <section className="bg-slate-800 p-6 rounded-3xl border border-slate-700/50 shadow-xl space-y-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
+            <Building2 className="w-4 h-4" /> 1. Entidad y Contacto
           </h3>
           {selectedTransporter && (
-            <button 
-              onClick={onReset}
-              className="flex items-center gap-1 text-xs font-medium text-red-400 hover:text-red-300 transition-colors px-3 py-1.5 rounded-lg border border-red-900/30 hover:bg-red-900/20"
-            >
-              <RotateCcw className="w-3 h-3" /> Nueva Simulación
+            <button onClick={onReset} className="text-[10px] text-red-400 font-bold hover:underline flex items-center gap-1">
+              <RotateCcw className="w-3 h-3" /> REINICIAR
             </button>
           )}
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Search / Name Field */}
-          <div className="col-span-1 md:col-span-2 relative" ref={dropdownRef}>
-            <label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">
-              Razón Social (Búsqueda Automática)
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                <Search className="w-4 h-4" />
-              </span>
-              <input
-                type="text"
-                className="w-full pl-10 pr-4 py-3 bg-slate-900 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-slate-500"
-                placeholder="Escriba el nombre del transportista..."
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setShowSuggestions(true);
-                }}
-                onFocus={() => setShowSuggestions(true)}
-              />
+
+        <div className="relative" ref={dropdownRef}>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
+            <input
+              type="text"
+              className="w-full pl-10 pr-4 py-3 bg-slate-900 border border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-600 transition-all text-sm"
+              placeholder="Buscar transportista por nombre o CUIT..."
+              value={searchTerm}
+              onChange={(e) => { setSearchTerm(e.target.value); setShowSuggestions(true); }}
+            />
+          </div>
+          {showSuggestions && searchTerm.length > 1 && (
+            <div className="absolute z-50 w-full mt-2 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-fadeIn">
+              {filteredTransporters.map(t => (
+                <div key={t.id} onClick={() => { onTransporterSelect(t); setSearchTerm(t.name); setShowSuggestions(false); }}
+                  className="px-4 py-3 hover:bg-blue-600 cursor-pointer border-b border-slate-800 transition-colors">
+                  <div className="font-bold text-white text-sm">{t.name}</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">CUIT: {t.cuit} | Fact: {formatCurrency(t.annualBilling)}</div>
+                </div>
+              ))}
             </div>
-            
-            {/* Autocomplete Dropdown */}
-            {showSuggestions && searchTerm.length > 0 && (
-              <div className="absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-xl max-h-60 overflow-y-auto">
-                {filteredTransporters.length > 0 ? (
-                  filteredTransporters.map((t) => (
-                    <div
-                      key={t.id}
-                      onClick={() => selectTransporter(t)}
-                      className="px-4 py-3 hover:bg-blue-600 cursor-pointer border-b border-slate-600 last:border-0 transition-colors"
-                    >
-                      <div className="font-medium text-white">{t.name}</div>
-                      <div className="text-xs text-slate-300 flex justify-between mt-1">
-                        <span>CUIT: {t.cuit}</span>
-                        <span className="text-emerald-400">{formatCurrency(t.annualBilling)}</span>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="px-4 py-3 text-slate-400 text-sm">No se encontraron resultados</div>
-                )}
+          )}
+        </div>
+
+        {selectedTransporter && (
+          <div className="grid grid-cols-2 gap-3 animate-fadeIn">
+            <div className="col-span-2 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase ml-1">Provincia</label>
+                  <input type="text" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" 
+                    placeholder="Ej: Santa Fe" value={contactInfo.province} onChange={e => onContactInfoChange({...contactInfo, province: e.target.value})} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase ml-1">Localidad</label>
+                  <input type="text" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" 
+                    placeholder="Ej: Rosario" value={contactInfo.city} onChange={e => onContactInfoChange({...contactInfo, city: e.target.value})} />
+                </div>
               </div>
-            )}
-          </div>
-
-          {/* Auto-populated Fields */}
-          <div className="col-span-1">
-            <label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">
-              N° de CUIT (Automático)
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
-                <FileText className="w-4 h-4" />
-              </span>
-              <input
-                type="text"
-                readOnly
-                className="w-full pl-10 pr-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-slate-300 font-mono"
-                value={selectedTransporter?.cuit || ''}
-                placeholder="-"
-              />
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-500 font-bold uppercase ml-1">Dirección</label>
+                <div className="relative">
+                  <MapPin className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-600" />
+                  <input type="text" className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-3 py-2 text-sm text-white" 
+                    placeholder="Calle y N°" value={contactInfo.address} onChange={e => onContactInfoChange({...contactInfo, address: e.target.value})} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase ml-1">Email</label>
+                  <div className="relative">
+                    <Mail className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-600" />
+                    <input type="email" className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-3 py-2 text-sm text-white" 
+                      placeholder="correo@ejemplo.com" value={contactInfo.email} onChange={e => onContactInfoChange({...contactInfo, email: e.target.value})} />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase ml-1">Teléfono</label>
+                  <div className="relative">
+                    <Phone className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-600" />
+                    <input type="text" className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-3 py-2 text-sm text-white" 
+                      placeholder="0341-..." value={contactInfo.phone} onChange={e => onContactInfoChange({...contactInfo, phone: e.target.value})} />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
+        )}
+      </section>
 
-          <div className="col-span-1">
-            <label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">
-              Facturación Anual (Automático)
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500">
-                <DollarSign className="w-4 h-4" />
-              </span>
-              <input
-                type="text"
-                readOnly
-                className="w-full pl-10 pr-4 py-2 bg-slate-900/50 border border-emerald-900/30 text-emerald-400 font-bold rounded-lg"
-                value={selectedTransporter ? formatCurrency(selectedTransporter.annualBilling) : ''}
-                placeholder="-"
-              />
+      {/* 2. CONFIGURACIÓN ADMIN (TASA) */}
+      {isAdmin && (
+        <section className="bg-amber-500/5 p-6 rounded-3xl border border-amber-500/20 shadow-xl space-y-4 animate-fadeIn">
+          <h3 className="text-sm font-black text-amber-500 uppercase tracking-widest flex items-center gap-2">
+            <Lock className="w-4 h-4" /> Control Administrador
+          </h3>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-slate-400">Tasa Nominal Anual (TNA):</span>
+              <span className="text-lg font-black text-amber-500">{simParams.interestRate}%</span>
             </div>
+            <input 
+              type="range" min="0" max="150" step="1" 
+              className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+              value={simParams.interestRate} 
+              onChange={e => onSimParamsChange({ ...simParams, interestRate: parseInt(e.target.value) })}
+            />
+            <p className="text-[10px] text-amber-500/60 italic">Este control solo es visible para su perfil.</p>
           </div>
-        </div>
-      </div>
+        </section>
+      )}
 
-      {/* --- SECTION 2: CONTACT DATA (MANUAL) --- */}
-      <div className="mb-8 border-b border-slate-700 pb-6">
-        <h3 className="text-lg font-bold text-blue-400 mb-4 flex items-center gap-2">
-          <MapPin className="w-5 h-5" />
-          Datos de Contacto y Ubicación
+      {/* 3. PRODUCTOS Y PLAZOS */}
+      <section className="bg-slate-800 p-6 rounded-3xl border border-slate-700/50 shadow-xl space-y-6">
+        <h3 className="text-sm font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
+          <Truck className="w-4 h-4" /> 2. Selección de Productos
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="col-span-1">
-            <label className="block text-xs font-medium text-slate-400 mb-1">Provincia</label>
-            <input
-              type="text"
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 text-white"
-              value={contactInfo.province}
-              onChange={(e) => handleContactChange('province', e.target.value)}
-            />
-          </div>
-          <div className="col-span-1">
-            <label className="block text-xs font-medium text-slate-400 mb-1">Ciudad / Localidad</label>
-            <input
-              type="text"
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 text-white"
-              value={contactInfo.city}
-              onChange={(e) => handleContactChange('city', e.target.value)}
-            />
-          </div>
-          <div className="col-span-1 md:col-span-2">
-            <label className="block text-xs font-medium text-slate-400 mb-1">Calle y Número</label>
-            <input
-              type="text"
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 text-white"
-              value={contactInfo.address}
-              onChange={(e) => handleContactChange('address', e.target.value)}
-            />
-          </div>
-          <div className="col-span-1">
-            <label className="block text-xs font-medium text-slate-400 mb-1 flex items-center gap-1">
-              <Phone className="w-3 h-3" /> Teléfono
-            </label>
-            <input
-              type="tel"
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 text-white"
-              value={contactInfo.phone}
-              onChange={(e) => handleContactChange('phone', e.target.value)}
-            />
-          </div>
-          <div className="col-span-1">
-            <label className="block text-xs font-medium text-slate-400 mb-1 flex items-center gap-1">
-              <Mail className="w-3 h-3" /> Email
-            </label>
-            <input
-              type="email"
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 text-white"
-              value={contactInfo.email}
-              onChange={(e) => handleContactChange('email', e.target.value)}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* --- SECTION 3: TIRE SELECTOR & FINANCING --- */}
-      <div>
-        <h3 className="text-lg font-bold text-blue-400 mb-4 flex items-center gap-2">
-          <Truck className="w-5 h-5" />
-          Selección de Neumáticos y Financiación
-        </h3>
-
-        {/* Tire Models Grid */}
-        <div className="space-y-3 mb-6">
-          <div className="grid grid-cols-12 gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider px-2">
-            <div className="col-span-5">Medida / Modelo</div>
-            <div className="col-span-3 text-right">Precio Un.</div>
-            <div className="col-span-4 text-center">Cantidad</div>
-          </div>
-          
-          {TIRE_MODELS.map((tire) => {
+        
+        <div className="space-y-3">
+          {TIRE_MODELS.map(tire => {
             const qty = simParams.items.find(i => i.tireId === tire.id)?.quantity || 0;
             return (
-              <div key={tire.id} className="grid grid-cols-12 gap-2 items-center bg-slate-900/50 p-2 rounded-lg border border-slate-700/50">
-                <div className="col-span-5">
+              <div key={tire.id} className="flex items-center justify-between bg-slate-900/40 p-3.5 rounded-2xl border border-slate-700/50">
+                <div>
                   <div className="text-sm font-bold text-white">{tire.name}</div>
+                  <div className="text-[10px] text-emerald-400 font-bold">{formatCurrency(tire.price)} unit.</div>
                 </div>
-                <div className="col-span-3 text-right">
-                  <div className="text-sm text-emerald-400">{formatCurrency(tire.price)}</div>
-                </div>
-                <div className="col-span-4 flex justify-center items-center gap-3">
-                  <button 
-                    onClick={() => updateCart(tire.id, -1)}
-                    className="p-1 bg-slate-700 hover:bg-slate-600 rounded text-white disabled:opacity-50"
-                    disabled={qty <= 0}
-                  >
-                    <Minus className="w-3 h-3" />
+                <div className="flex items-center gap-3">
+                  <button onClick={() => updateCart(tire.id, -1)} disabled={qty === 0}
+                    className="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center text-white disabled:opacity-20">
+                    <Minus className="w-4 h-4" />
                   </button>
-                  <span className="w-6 text-center font-bold text-white">{qty}</span>
-                  <button 
-                    onClick={() => updateCart(tire.id, 1)}
-                    className="p-1 bg-blue-600 hover:bg-blue-500 rounded text-white"
-                  >
-                    <Plus className="w-3 h-3" />
+                  <span className="w-4 text-center font-black text-white">{qty}</span>
+                  <button onClick={() => updateCart(tire.id, 1)}
+                    className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white">
+                    <Plus className="w-4 h-4" />
                   </button>
                 </div>
               </div>
             );
           })}
-          
-          <div className="flex justify-between items-center pt-3 border-t border-slate-700 mt-2">
-            <span className="text-sm text-slate-400">Total Compra:</span>
-            <span className="text-lg font-bold text-white">{formatCurrency(calculateTotalPurchase())}</span>
-          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Interest Rate - Occupies full width on mobile or 1 col on desktop */}
-          <div className="col-span-1">
-            <label className="block text-xs font-medium text-slate-400 mb-1 uppercase">
-              Tasa Nominal Anual (TNA %)
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
-                <Percent className="w-3 h-3" />
-              </span>
-              <input
-                type="number"
-                min="0"
-                className="w-full pl-8 pr-3 py-2 bg-slate-900 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 text-white"
-                value={simParams.interestRate}
-                onChange={(e) => handleSimChange('interestRate', parseFloat(e.target.value))}
-              />
-            </div>
+        <div className={`p-4 rounded-2xl border-2 transition-all ${isOverLimit ? 'bg-red-500/10 border-red-500/30' : 'bg-slate-900 border-slate-700'}`}>
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-slate-500 uppercase font-bold">Total Compra:</span>
+            <span className={`text-xl font-black ${isOverLimit ? 'text-red-400' : 'text-white'}`}>{formatCurrency(totalPurchase)}</span>
           </div>
-          
-          {/* Empty spacer or another field if needed */}
-          <div className="hidden md:block col-span-1"></div>
+          {selectedTransporter && (
+             <div className="mt-2 pt-2 border-t border-slate-800 flex justify-between items-center text-[10px]">
+                <span className="text-slate-500">Capacidad Máxima (30%):</span>
+                <span className={`font-bold ${isOverLimit ? 'text-red-400' : 'text-emerald-400'}`}>{formatCurrency(maxLimit)}</span>
+             </div>
+          )}
+        </div>
 
-          {/* Term */}
-          <div className="col-span-1 md:col-span-2">
-            <label className="block text-xs font-medium text-slate-400 mb-2 uppercase">
-              Sistema de Amortización (Plazo)
-            </label>
-            <div className="grid grid-cols-4 gap-2">
-              {[3, 6, 12].map(m => (
-                <button
-                  key={m}
-                  onClick={() => {
-                    // Fix: Update both properties in a single object to prevent state race conditions
-                    onSimParamsChange({
-                      ...simParams,
-                      months: m,
-                      isAnnualPayment: false
-                    });
-                  }}
-                  className={`py-3 rounded-lg border text-sm font-medium transition-all flex flex-col items-center justify-center gap-1 ${
-                    simParams.months === m && !simParams.isAnnualPayment
-                      ? 'bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-900/50'
-                      : 'bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500'
-                  }`}
-                >
-                  <Calendar className="w-4 h-4" />
-                  {m} Cuotas
-                </button>
-              ))}
-              
-              {/* Annual Option */}
-              <button
-                onClick={() => {
-                   onSimParamsChange({
-                      ...simParams,
-                      months: 12,
-                      isAnnualPayment: true
-                    });
-                }}
-                className={`py-3 rounded-lg border text-sm font-medium transition-all flex flex-col items-center justify-center gap-1 ${
-                  simParams.isAnnualPayment
-                    ? 'bg-emerald-600 text-white border-emerald-500 shadow-lg shadow-emerald-900/50'
-                    : 'bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500'
-                }`}
-              >
-                <DollarSign className="w-4 h-4" />
-                1 Cuota Anual
+        <div className="space-y-3">
+          <label className="text-[10px] text-slate-500 font-bold uppercase ml-1">Plazo de Pago (Sistema Francés)</label>
+          <div className="grid grid-cols-3 gap-2">
+            {[3, 6, 12].map(m => (
+              <button key={m} onClick={() => onSimParamsChange({ ...simParams, months: m })}
+                className={`py-3 rounded-xl border-2 font-black transition-all text-xs flex flex-col items-center gap-1 ${simParams.months === m ? 'bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-900/20' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
+                <Calendar className="w-4 h-4" /> {m} MESES
               </button>
-            </div>
+            ))}
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 };

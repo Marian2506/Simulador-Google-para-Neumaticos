@@ -27,15 +27,16 @@ export interface CartItem {
 
 export interface SimulationParams {
   items: CartItem[];
-  downPayment: number; // Percentage 0-100
-  interestRate: number; // TNA
-  months: number; // 3, 6, 12
-  isAnnualPayment: boolean; // True if "1 cuota anual"
+  downPayment: number;
+  interestRate: number;
+  months: number;
+  isAnnualPayment: boolean;
 }
 
 export interface AmortizationRow {
   period: number;
   periodLabel: string;
+  date: string;
   payment: number;
   interest: number;
   principal: number;
@@ -49,11 +50,6 @@ export interface SimulationResult {
   amortizationSchedule: AmortizationRow[];
   isViable: boolean;
   viabilityMessage: string;
-  riskRatio: number; // Payment / Monthly Income
+  riskRatio: number;
   loanAmount: number;
-}
-
-export enum ViewState {
-  SEARCH = 'SEARCH',
-  SIMULATOR = 'SIMULATOR'
 }
